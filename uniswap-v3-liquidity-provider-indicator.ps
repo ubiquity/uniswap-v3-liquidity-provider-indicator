@@ -1,0 +1,230 @@
+//@version = 5
+indicator( "LP Breakeven v2", overlay = true )
+
+// TIMEFRAMES
+    // original = original
+    // sampled = user captured data time
+    // estimated = projections
+
+// DATA TYPES
+    // units = units of token (e.g. 1 = 1 ETH)
+    // value = dollar equivalent of token (e.g. 1 = $1)
+
+// SUBJECT
+    // liquidity = active in position
+    // unclaimed = unclaimed fees aka yield
+    // position = liquidity + unclaimed
+    // A - stable asset (e.g. USDC)
+    // B - volatile asset (e.g. ETH)
+
+// [TIMEFRAMES][DATA TYPES][SUBJECT]
+
+
+SAMPLED_TIME = input.time(1666928013587, "Sampled Time") // when this data was input #
+
+ORIGINAL_TIME = input.time(1659519154000, "Deposit Time") // unix timestamp of deposit time #
+ORIGINAL_PRICE = input.float(1618.68, "Deposit Price (enter 0 to estimate)")
+
+ORIGINAL_LIQUIDITY_UNITS_A = input.float(1000100, "Deposit Amount A") // usdc #
+ORIGINAL_LIQUIDITY_UNITS_B = input.float(0, "Deposit Amount B") // eth #
+
+// should be able to estimate sampled price, and calculate ratios...
+SAMPLED_LIQUIDITY_UNITS_A = input.float(560752.7766, "Current Amount A")
+SAMPLED_LIQUIDITY_UNITS_B = input.float(263.9917, "Current Amount B")
+
+// yield can not be estimated without seeing on-chain swap data
+SAMPLED_UNCLAIMED_UNITS_A = input.float(20150.483785, "Yield Amount A")
+SAMPLED_UNCLAIMED_UNITS_B = input.float(14.786838, "Yield Amount B")
+
+// OPTIONAL RANGE GRAPHING
+
+RANGE_UPPER=2000.2
+RANGE_BOTTOM=1000.3
+upperRangeLine = line.new(ORIGINAL_TIME, RANGE_UPPER, SAMPLED_TIME, RANGE_UPPER, xloc.bar_time, extend.right, color.yellow, style=line.style_dotted, width = 3)
+bottomRangeLine = line.new(ORIGINAL_TIME, RANGE_BOTTOM, SAMPLED_TIME, RANGE_BOTTOM, xloc.bar_time, extend.right, color.yellow, style=line.style_dotted, width = 3)
+
+//
+
+// rp_security(_symbol, _res, _src) => security(_symbol, _res, _src[barstate.isrealtime ? 1 : 0])
+
+timestampToBarIndex(timestamp)=> // converts unix timestamp to tradingview bar index
+    previousBarIndex = (time - timestamp) / (1000 * timeframe.in_seconds(timeframe.period))
+    barsBack = bar_index - previousBarIndex
+
+liquidity0(amount, pa, pb) =>
+    a = pa
+    b = pb
+    if pa > pb
+        a := pb
+        b := pa
+    amount * (a * b) / (b - a)
+
+liquidity1(amount, pa, pb) =>
+    a = pa
+    b = pb
+    if pa > pb
+        a := pb
+        b := pa
+    amount / (b - a)
+
+calc_amount0(liq, pa, pb) =>
+    a = pa
+    b = pb
+    if pa > pb
+        a := pb
+        b := pa
+    liq * (b - a) / b / a
+
+calc_amount1(liq, pa, pb) =>
+    a = pa
+    b = pb
+    if pa > pb
+        a := pb
+        b := pa
+    liq * (b - a)
+
+
+sampledBarIndex = timestampToBarIndex(SAMPLED_TIME)
+sampledCondition = time >= SAMPLED_TIME and time[1] < SAMPLED_TIME
+sampledPrice = ta.valuewhen(sampledCondition, ohlc4, 0)
+
+originalBarIndex = timestampToBarIndex(ORIGINAL_TIME)
+originalCondition = time >= ORIGINAL_TIME and time[1] < ORIGINAL_TIME
+originalPrice = ORIGINAL_PRICE
+
+if originalPrice == 0
+    originalPrice := ta.valuewhen(originalCondition, ohlc4, 0) // estimate original price
+
+originalValueLiquidity = ORIGINAL_LIQUIDITY_UNITS_A + ( ORIGINAL_LIQUIDITY_UNITS_B * originalPrice ) // total original dollar amount $ // $980,916.20
+
+sampledValueLiquidityA = SAMPLED_LIQUIDITY_UNITS_A * 1 // @FIXME: should be calculated based on B
+sampledValueLiquidityB = SAMPLED_LIQUIDITY_UNITS_B * sampledPrice
+sampledValueLiquidity = sampledValueLiquidityA + sampledValueLiquidityB
+
+sampledValueUnclaimedA = SAMPLED_UNCLAIMED_UNITS_A * 1 // @FIXME: should be calculated based on B
+sampledValueUnclaimedB = SAMPLED_UNCLAIMED_UNITS_B * sampledPrice
+sampledValueUnclaimed = sampledValueUnclaimedA + sampledValueUnclaimedB
+
+sampledValuePosition = sampledValueLiquidity + sampledValueUnclaimed
+
+estimatedLiquidityValue = SAMPLED_LIQUIDITY_UNITS_A + ( SAMPLED_LIQUIDITY_UNITS_B * close ) // current position dollar amount $ // $905,567.12
+estimatedValueUnclaimed = SAMPLED_UNCLAIMED_UNITS_A + ( SAMPLED_UNCLAIMED_UNITS_B * close ) // current yield dollar amount $ // $35,750.05
+estimatedValuePosition = estimatedLiquidityValue + estimatedValueUnclaimed
+
+
+getApr()=>
+    MS_IN_YEAR = 31536000000
+    howMuchOfAYearElapsed = (SAMPLED_TIME - ORIGINAL_TIME)/MS_IN_YEAR // =0.2349333963 almost a quarter of a year
+    percentYield = estimatedValueUnclaimed / originalValueLiquidity // = 0.04233835616
+    restOfYearToExtrapolate = 1 - howMuchOfAYearElapsed // = 0.7650666037
+    multiplier = restOfYearToExtrapolate / howMuchOfAYearElapsed // 3.2565255334
+    apr = percentYield * multiplier // 0.1378759379
+
+// x1 = ORIGINAL_TIME // 1659519154000
+// y1 = originalValueLiquidity // 1000100
+// z1 = ORIGINAL_PRICE // 1618.68
+
+// x2 = SAMPLED_TIME // 1666928013587
+// y2 = estimatedValuePosition // 1003551.04
+// z2 = close // 1515.71
+
+// y1 =
+
+// ORIGINAL_LIQUIDITY_UNITS_A = 1000100
+// originalValueLiquidity = 1000100
+// ORIGINAL_LIQUIDITY_UNITS_B = 0
+// sampledValueUnclaimed = 42342.59
+// sampledPrice = 1506.89
+// breakevenPrice = (( originalValueLiquidity ) - sampledValueUnclaimed ) / ( ORIGINAL_LIQUIDITY_UNITS_B )
+// if ORIGINAL_LIQUIDITY_UNITS_B == 0
+    // breakevenPrice :=  originalValueLiquidity - sampledValueUnclaimed
+breakevenPrice = sampledPrice * ( originalValueLiquidity / sampledValuePosition )
+// breakevenPrice = close * ( originalValueLiquidity / estimatedValuePosition )
+
+breakevenValueDeposit = ORIGINAL_LIQUIDITY_UNITS_A + ( ORIGINAL_LIQUIDITY_UNITS_B * breakevenPrice )
+breakevenValueYield = SAMPLED_UNCLAIMED_UNITS_A + ( SAMPLED_UNCLAIMED_UNITS_B * breakevenPrice )
+
+CYAN = color.rgb( 0, 225, 0, 75 )
+
+// breakevenLine = line.new( originalBarIndex, originalPrice, bar_index, na, xloc.bar_index, extend.right, CYAN, width = 3 )
+
+// sampledToNowLine = line.new(timenow, breakevenPrice, SAMPLED_TIME, sampledPrice, xloc.bar_time, color=CYAN, width=3)
+// sampledToNowLine = line.new(timenow, breakevenPrice, ORIGINAL_TIME, originalPrice, xloc.bar_time, extend.both)
+
+if barstate.islast
+
+    breakevenLabel = label.new( bar_index, breakevenPrice, str.tostring(breakevenPrice), xloc.bar_index, color = CYAN, style=label.style_xcross, textcolor = color.white, textalign = text.align_center, size=size.tiny )
+    breakevenLine = line.new( ORIGINAL_TIME, originalPrice, timenow, breakevenPrice, xloc.bar_time, extend.right, CYAN, width = 3 )
+    sampledLabel = label.new( SAMPLED_TIME, sampledPrice, "sampled", style=label.style_cross, color = CYAN, textcolor=color.white, textalign=text.align_center, xloc = xloc.bar_time, size=size.tiny )
+
+breakevenPercent = ( (close / breakevenPrice) - 1 ) * -100
+// plotchar( breakevenPrice, "Breakeven", display = display.data_window )
+// plotchar( breakevenPercent, "Breakeven", display = display.data_window )
+// plotchar( originalPrice, "Deposit Price", display = display.data_window )
+// plotchar( originalValueLiquidity, "Deposit Value", display = display.data_window )
+// plotchar( estimatedValuePosition, "Estimated Value", display = display.data_window )
+
+
+
+
+// plotchar( apr, "apr", display=display.data_window)
+plotchar( breakevenPercent, "breakevenPercent", display=display.data_window)
+plotchar( breakevenPrice, "breakevenPrice", display=display.data_window)
+plotchar( breakevenValueDeposit, "breakevenValueDeposit", display=display.data_window)
+plotchar( breakevenValueYield, "breakevenValueYield", display=display.data_window)
+plotchar( estimatedLiquidityValue, "estimatedLiquidityValue", display=display.data_window)
+plotchar( estimatedValuePosition, "estimatedValuePosition", display=display.data_window)
+plotchar( estimatedValueUnclaimed, "estimatedValueUnclaimed", display=display.data_window)
+plotchar( ORIGINAL_LIQUIDITY_UNITS_A, "ORIGINAL_LIQUIDITY_UNITS_A", display=display.data_window)
+plotchar( ORIGINAL_LIQUIDITY_UNITS_B, "ORIGINAL_LIQUIDITY_UNITS_B", display=display.data_window)
+plotchar( ORIGINAL_PRICE, "ORIGINAL_PRICE", display=display.data_window)
+plotchar( ORIGINAL_TIME, "ORIGINAL_TIME", display=display.data_window)
+plotchar( originalBarIndex, "originalBarIndex", display=display.data_window)
+plotchar( originalCondition, "originalCondition", display=display.data_window)
+plotchar( originalPrice, "originalPrice", display=display.data_window)
+plotchar( originalValueLiquidity, "originalValueLiquidity", display=display.data_window)
+plotchar( SAMPLED_LIQUIDITY_UNITS_A, "SAMPLED_LIQUIDITY_UNITS_A", display=display.data_window)
+plotchar( SAMPLED_LIQUIDITY_UNITS_B, "SAMPLED_LIQUIDITY_UNITS_B", display=display.data_window)
+plotchar( SAMPLED_TIME, "SAMPLED_TIME", display=display.data_window)
+plotchar( SAMPLED_UNCLAIMED_UNITS_A, "SAMPLED_UNCLAIMED_UNITS_A", display=display.data_window)
+plotchar( SAMPLED_UNCLAIMED_UNITS_B, "SAMPLED_UNCLAIMED_UNITS_B", display=display.data_window)
+plotchar( sampledBarIndex, "sampledBarIndex", display=display.data_window)
+plotchar( sampledCondition, "sampledCondition", display=display.data_window)
+plotchar( sampledPrice, "sampledPrice", display=display.data_window)
+plotchar( sampledValueLiquidity, "sampledValueLiquidity", display=display.data_window)
+plotchar( sampledValueLiquidityA, "sampledValueLiquidityA", display=display.data_window)
+plotchar( sampledValueLiquidityB, "sampledValueLiquidityB", display=display.data_window)
+plotchar( sampledValuePosition, "sampledValuePosition", display=display.data_window)
+plotchar( sampledValueUnclaimed, "sampledValueUnclaimed", display=display.data_window)
+plotchar( sampledValueUnclaimedA, "sampledValueUnclaimedA", display=display.data_window)
+plotchar( sampledValueUnclaimedB, "sampledValueUnclaimedB", display=display.data_window)
+
+
+// PYTHON - calculate current holdings
+//
+// pa // Lower bound of a price range
+// pb // Upper bound of a price range
+//
+
+// def liquidity0(amount, pa, pb):
+//     if pa > pb:
+//         pa, pb = pb, pa
+//     return (amount * (pa * pb)) / (pb - pa)
+
+
+
+// def liquidity1(amount, pa, pb):
+//     if pa > pb:
+//         pa, pb = pb, pa
+//     return amount / (pb - pa)
+
+// def calc_amount0(liq, pa, pb):
+//     if pa > pb:
+//         pa, pb = pb, pa
+//     return int(liq * (pb - pa) / pb / pa)
+
+
+// def calc_amount1(liq, pa, pb):
+//     if pa > pb:
+//         pa, pb = pb, pa
+//     return int(liq * (pb - pa))

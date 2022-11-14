@@ -11,4 +11,4 @@ As of 14 November 2022, the indicator plots four lines:
 1. The breakeven line of the Uniswap V3 LP position (downwards, to the right)
 1. The divergence loss line of the Uniswap V3 LP position (upwards, to the right)
 
-Optimally, the liquidity provider should seek to maintain the price of the asset (ETH) inside of all the ranges (above breakeven & bottom of range, and below divergence loss & top of range.) However, depending on your greater asset management strategy, sometimes its fine to be anywhere above the breakeven line!
+Optimally, the liquidity provider should seek to maintain the price of the asset (ETH) inside of all the ranges (above breakeven & bottom of range, and below divergence loss & top of range.) However, depending on your greater asset management strategy, generally it is fine to be anywhere above the breakeven line!

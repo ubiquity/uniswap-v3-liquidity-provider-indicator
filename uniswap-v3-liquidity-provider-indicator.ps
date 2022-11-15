@@ -1,4 +1,5 @@
 //@version = 5
+
 indicator( "LP Breakeven v2", overlay = true )
 
 // TIMEFRAMES
@@ -40,16 +41,14 @@ SAMPLED_UNCLAIMED_UNITS_B = input.float(14.786838, "Yield Amount B")
 
 RANGE_UPPER=2000.2
 RANGE_BOTTOM=1000.3
-upperRangeLine = line.new(ORIGINAL_TIME, RANGE_UPPER, SAMPLED_TIME, RANGE_UPPER, xloc.bar_time, extend.right, color.yellow, style=line.style_dotted, width = 3)
-bottomRangeLine = line.new(ORIGINAL_TIME, RANGE_BOTTOM, SAMPLED_TIME, RANGE_BOTTOM, xloc.bar_time, extend.right, color.yellow, style=line.style_dotted, width = 3)
+upperRangeLine = line.new(ORIGINAL_TIME, RANGE_UPPER, SAMPLED_TIME, RANGE_UPPER, xloc.bar_time, extend.right, color.yellow, style=line.style_dotted, width = 1)
+bottomRangeLine = line.new(ORIGINAL_TIME, RANGE_BOTTOM, SAMPLED_TIME, RANGE_BOTTOM, xloc.bar_time, extend.right, color.yellow, style=line.style_dotted, width = 1)
 
-//
-
-// rp_security(_symbol, _res, _src) => security(_symbol, _res, _src[barstate.isrealtime ? 1 : 0])
+// 
 
 timestampToBarIndex(timestamp)=> // converts unix timestamp to tradingview bar index
     previousBarIndex = (time - timestamp) / (1000 * timeframe.in_seconds(timeframe.period))
-    barsBack = bar_index - previousBarIndex
+    barsBack = bar_index - previousBarIndex 
 
 liquidity0(amount, pa, pb) =>
     a = pa
@@ -84,7 +83,7 @@ calc_amount1(liq, pa, pb) =>
     liq * (b - a)
 
 
-sampledBarIndex = timestampToBarIndex(SAMPLED_TIME)
+sampledBarIndex = timestampToBarIndex(SAMPLED_TIME) 
 sampledCondition = time >= SAMPLED_TIME and time[1] < SAMPLED_TIME
 sampledPrice = ta.valuewhen(sampledCondition, ohlc4, 0)
 
@@ -120,54 +119,26 @@ getApr()=>
     multiplier = restOfYearToExtrapolate / howMuchOfAYearElapsed // 3.2565255334
     apr = percentYield * multiplier // 0.1378759379
 
-// x1 = ORIGINAL_TIME // 1659519154000
-// y1 = originalValueLiquidity // 1000100
-// z1 = ORIGINAL_PRICE // 1618.68
-
-// x2 = SAMPLED_TIME // 1666928013587
-// y2 = estimatedValuePosition // 1003551.04
-// z2 = close // 1515.71
-
-// y1 =
-
-// ORIGINAL_LIQUIDITY_UNITS_A = 1000100
-// originalValueLiquidity = 1000100
-// ORIGINAL_LIQUIDITY_UNITS_B = 0
-// sampledValueUnclaimed = 42342.59
-// sampledPrice = 1506.89
-// breakevenPrice = (( originalValueLiquidity ) - sampledValueUnclaimed ) / ( ORIGINAL_LIQUIDITY_UNITS_B )
-// if ORIGINAL_LIQUIDITY_UNITS_B == 0
-    // breakevenPrice :=  originalValueLiquidity - sampledValueUnclaimed
 breakevenPrice = sampledPrice * ( originalValueLiquidity / sampledValuePosition )
-// breakevenPrice = close * ( originalValueLiquidity / estimatedValuePosition )
+deltaPrice = originalPrice - breakevenPrice
+inverseBreakevenPrice = originalPrice + deltaPrice
 
-breakevenValueDeposit = ORIGINAL_LIQUIDITY_UNITS_A + ( ORIGINAL_LIQUIDITY_UNITS_B * breakevenPrice )
-breakevenValueYield = SAMPLED_UNCLAIMED_UNITS_A + ( SAMPLED_UNCLAIMED_UNITS_B * breakevenPrice )
+breakevenValueDeposit = ORIGINAL_LIQUIDITY_UNITS_A + ( ORIGINAL_LIQUIDITY_UNITS_B * breakevenPrice ) 
+breakevenValueYield = SAMPLED_UNCLAIMED_UNITS_A + ( SAMPLED_UNCLAIMED_UNITS_B * breakevenPrice ) 
 
-CYAN = color.rgb( 0, 225, 0, 75 )
-
-// breakevenLine = line.new( originalBarIndex, originalPrice, bar_index, na, xloc.bar_index, extend.right, CYAN, width = 3 )
-
-// sampledToNowLine = line.new(timenow, breakevenPrice, SAMPLED_TIME, sampledPrice, xloc.bar_time, color=CYAN, width=3)
-// sampledToNowLine = line.new(timenow, breakevenPrice, ORIGINAL_TIME, originalPrice, xloc.bar_time, extend.both)
+GREEN = color.rgb( 0, 225, 0, 75 )
+// inverseGREEN = color.rgb( 255, 0, 255, 75 )
 
 if barstate.islast
 
-    breakevenLabel = label.new( bar_index, breakevenPrice, str.tostring(breakevenPrice), xloc.bar_index, color = CYAN, style=label.style_xcross, textcolor = color.white, textalign = text.align_center, size=size.tiny )
-    breakevenLine = line.new( ORIGINAL_TIME, originalPrice, timenow, breakevenPrice, xloc.bar_time, extend.right, CYAN, width = 3 )
-    sampledLabel = label.new( SAMPLED_TIME, sampledPrice, "sampled", style=label.style_cross, color = CYAN, textcolor=color.white, textalign=text.align_center, xloc = xloc.bar_time, size=size.tiny )
+    breakevenLabel = label.new( bar_index, breakevenPrice, str.tostring(breakevenPrice), xloc.bar_index, color = GREEN, style=label.style_xcross, textcolor = color.white, textalign = text.align_center, size=size.tiny )
+    breakevenLine = line.new( ORIGINAL_TIME, originalPrice, timenow, breakevenPrice, xloc.bar_time, extend.right, color.yellow, style=line.style_dotted, width = 1 )
+    sampledLabel = label.new( SAMPLED_TIME, sampledPrice, "sampled", style=label.style_cross, color = GREEN, textcolor=color.white, textalign=text.align_center, xloc = xloc.bar_time, size=size.tiny )
+    
+    inverseBreakevenLine = line.new( ORIGINAL_TIME, originalPrice, timenow, inverseBreakevenPrice, xloc.bar_time, extend.right, color.yellow, style=line.style_dotted, width = 1 )
 
 breakevenPercent = ( (close / breakevenPrice) - 1 ) * -100
-// plotchar( breakevenPrice, "Breakeven", display = display.data_window )
-// plotchar( breakevenPercent, "Breakeven", display = display.data_window )
-// plotchar( originalPrice, "Deposit Price", display = display.data_window )
-// plotchar( originalValueLiquidity, "Deposit Value", display = display.data_window )
-// plotchar( estimatedValuePosition, "Estimated Value", display = display.data_window )
 
-
-
-
-// plotchar( apr, "apr", display=display.data_window)
 plotchar( breakevenPercent, "breakevenPercent", display=display.data_window)
 plotchar( breakevenPrice, "breakevenPrice", display=display.data_window)
 plotchar( breakevenValueDeposit, "breakevenValueDeposit", display=display.data_window)
@@ -199,32 +170,5 @@ plotchar( sampledValueUnclaimed, "sampledValueUnclaimed", display=display.data_w
 plotchar( sampledValueUnclaimedA, "sampledValueUnclaimedA", display=display.data_window)
 plotchar( sampledValueUnclaimedB, "sampledValueUnclaimedB", display=display.data_window)
 
-
-// PYTHON - calculate current holdings
-//
-// pa // Lower bound of a price range
-// pb // Upper bound of a price range
-//
-
-// def liquidity0(amount, pa, pb):
-//     if pa > pb:
-//         pa, pb = pb, pa
-//     return (amount * (pa * pb)) / (pb - pa)
-
-
-
-// def liquidity1(amount, pa, pb):
-//     if pa > pb:
-//         pa, pb = pb, pa
-//     return amount / (pb - pa)
-
-// def calc_amount0(liq, pa, pb):
-//     if pa > pb:
-//         pa, pb = pb, pa
-//     return int(liq * (pb - pa) / pb / pa)
-
-
-// def calc_amount1(liq, pa, pb):
-//     if pa > pb:
-//         pa, pb = pb, pa
-//     return int(liq * (pb - pa))
+plotchar( deltaPrice, "deltaPrice", display=display.data_window)
+plotchar( inverseBreakevenPrice, "inverseBreakevenPrice", display=display.data_window)
